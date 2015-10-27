@@ -194,7 +194,7 @@ typedef struct _jl_lambda_info_t {
     jl_array_t *roots;  // pointers in generated code
     jl_tupletype_t *specTypes;  // argument types this is specialized for
     // a slower-but-works version of this function as a fallback
-    struct _jl_function_t *unspecialized;
+    struct _jl_lambda_info_t *unspecialized;
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     struct _jl_module_t *module;
@@ -219,12 +219,7 @@ typedef struct _jl_lambda_info_t {
     int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;
 
-typedef struct _jl_function_t {
-    JL_DATA_TYPE
-    jl_fptr_t fptr;
-    jl_value_t *env;
-    jl_lambda_info_t *linfo;
-} jl_function_t;
+typedef jl_value_t jl_function_t;
 
 typedef struct {
     JL_DATA_TYPE
@@ -245,6 +240,7 @@ typedef struct {
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
     ptrint_t uid;
+    struct _jl_methtable_t *mt;
 } jl_typename_t;
 
 typedef struct {
@@ -325,7 +321,7 @@ typedef struct _jl_module_t {
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_array_t *constant_table;
-    jl_function_t *call_func;  // cached lookup of `call` within this module
+    //jl_function_t *call_func;  // cached lookup of `call` within this module
     uint8_t istopmod;
     uint8_t std_imports;  // only for temporarily deprecating `importall Base.Operators`
     uint64_t uuid;
@@ -337,7 +333,7 @@ typedef struct _jl_methlist_t {
     int8_t va;
     int8_t isstaged;
     jl_svec_t *tvars;
-    jl_function_t *func;
+    jl_lambda_info_t *linfo;
     // cache of specializations of this method for invoke(), i.e.
     // cases where this method was called even though it was not necessarily
     // the most specific for the argument types.
@@ -355,7 +351,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
     ptrint_t max_args;  // max # of non-vararg arguments in a signature
-    jl_function_t *kwsorter;  // keyword argument sorter function
+    jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
 #ifdef JL_GF_PROFILE
     int ncalls;

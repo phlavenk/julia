@@ -1883,6 +1883,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         jl_add_linfo_root(ctx->linfo, fun);
         return literal_pointer_val(fun);
     }
+    assert(false);
 
     int argStart = ctx->gc.argDepth;
     size_t clen = jl_array_dim0(capt);
