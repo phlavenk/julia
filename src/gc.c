@@ -1849,8 +1849,7 @@ static void pre_mark(void)
     }
 
     jl_mark_box_caches();
-    gc_push_root(jl_unprotect_stack_func, 0);
-    gc_push_root(jl_bottom_func, 0);
+    //gc_push_root(jl_unprotect_stack_func, 0);
     gc_push_root(jl_typetype_type, 0);
 
     // constants

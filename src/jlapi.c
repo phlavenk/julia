@@ -120,11 +120,7 @@ DLLEXPORT jl_value_t *jl_do_call(jl_function_t *f, jl_value_t **args, int32_t na
     argv[0] = (jl_value_t*)f;
     for(int i=1; i<nargs+1; i++)
         argv[i] = args[i-1];
-    jl_value_t *v;
-    if (jl_is_function(f))
-        v = jl_apply(f, &argv[1], nargs);
-    else
-        v = jl_apply(jl_module_call_func(((jl_datatype_t*)jl_typeof(f))->name->module), argv, nargs+1);
+    v = jl_apply_generic(argv, nargs+1);
     JL_GC_POP();
     return v;
 }
@@ -138,7 +134,7 @@ DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs
         argv[0] = (jl_value_t*) f;
         for(int i=1; i<nargs+1; i++)
             argv[i] = args[i-1];
-        v = jl_apply(f, args, nargs);
+        v = jl_apply_generic(argv, nargs+1);
         JL_GC_POP();
         jl_exception_clear();
     }

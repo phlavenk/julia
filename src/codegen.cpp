@@ -325,7 +325,6 @@ static Function *jlnsvec_func;
 static Function *jlapplygeneric_func;
 static Function *jlgetfield_func;
 static Function *jlbox_func;
-static Function *jlclosure_func;
 static Function *jlmethod_func;
 static Function *jlgenericfunction_func;
 static Function *jlenter_func;
@@ -878,12 +877,11 @@ static void jl_setup_module(Module *m, bool add)
     }
 }
 
-extern "C" void jl_generate_fptr(jl_function_t *f)
+extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 {
     // objective: assign li->fptr
-    jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
-    if (li->fptr == &jl_trampoline) {
+    if (li->fptr == NULL) {
         JL_SIGATOMIC_BEGIN();
         #ifdef USE_MCJIT
         if (imaging_mode) {
@@ -946,12 +944,10 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         }
         JL_SIGATOMIC_END();
     }
-    f->fptr = li->fptr;
 }
 
-extern "C" void jl_compile(jl_function_t *f)
+extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 {
-    jl_lambda_info_t *li = f->linfo;
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
@@ -1112,9 +1108,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
     }
     if (sf == NULL || sf->linfo == NULL) {
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), tt, 0, 0);
-        if (sf == jl_bottom_func) {
+        if (sf == NULL)
             return NULL;
-        }
         jl_printf(JL_STDERR,
                   "WARNING: Returned code may not match what actually runs.\n");
     }
@@ -1863,65 +1858,6 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
         jl_cell_1d_push(li->roots, val);
     }
     JL_GC_POP();
-}
-
-static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
-{
-    assert(jl_is_lambda_info(expr));
-    size_t i;
-    jl_value_t *ast = ((jl_lambda_info_t*)expr)->ast;
-    jl_array_t *capt;
-    if (jl_is_expr(ast))
-        capt = jl_lam_capt((jl_expr_t*)ast);
-    else
-        capt = (jl_array_t*)((jl_lambda_info_t*)expr)->capt;
-    if (capt == NULL || jl_array_dim0(capt) == 0) {
-        // no captured vars; lift
-        jl_value_t *fun =
-            (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_emptysvec,
-                                        (jl_lambda_info_t*)expr);
-        jl_add_linfo_root(ctx->linfo, fun);
-        return literal_pointer_val(fun);
-    }
-    assert(false);
-
-    int argStart = ctx->gc.argDepth;
-    size_t clen = jl_array_dim0(capt);
-    Value **captured = (Value**) alloca((1 + clen) * sizeof(Value*));
-    captured[0] = ConstantInt::get(T_size, clen);
-    for(i=0; i < clen; i++) {
-        Value *val;
-        jl_array_t *vi = (jl_array_t*)jl_cellref(capt, i);
-        assert(jl_is_array(vi));
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(vi,0);
-        assert(jl_is_symbol(s));
-        jl_varinfo_t &vari = ctx->vars[s];
-        if (vari.memloc) {
-            val = builder.CreateLoad(vari.memloc, vari.isVolatile);
-        }
-        else {
-            assert(!vari.isAssigned || vari.value.isghost); // make sure there wasn't an inference / codegen error earlier
-            val = boxed(vari.value, ctx);
-            if (!vari.value.isghost)
-                make_gcroot(val, ctx);
-        }
-        captured[i+1] = val;
-    }
-    Value *env_tuple = builder.CreateCall(prepare_call(jlnsvec_func),
-                                   ArrayRef<Value*>(&captured[0], 1+clen));
-    ctx->gc.argDepth = argStart; // remove arguments roots from the implicit gc stack
-    make_gcroot(env_tuple, ctx);
-#ifdef LLVM37
-    Value *result = builder.CreateCall(prepare_call(jlclosure_func),
-                                        {Constant::getNullValue(T_pint8),
-                                        env_tuple, literal_pointer_val(expr)});
-#else
-    Value *result = builder.CreateCall3(prepare_call(jlclosure_func),
-                                        Constant::getNullValue(T_pint8),
-                                        env_tuple, literal_pointer_val(expr));
-#endif
-    ctx->gc.argDepth--; // pop env_tuple from the implicit gc stack
-    return result;
 }
 
 // --- generating function calls ---
@@ -3366,9 +3302,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
             }
         }
         return jl_cgval_t();
-    }
-    if (jl_is_lambda_info(expr)) {
-        return mark_julia_type(emit_lambda_closure(expr, ctx), jl_function_type);
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
@@ -5133,7 +5066,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             if (lam->functionObject == NULL) {
                 lam->functionObject = (void*)f;
                 lam->functionID = jl_assign_functionID(f);
-                assert(lam->fptr == &jl_trampoline);
+                assert(lam->fptr == NULL);
                 lam->fptr = (jl_fptr_t)fptr;
             }
         }
@@ -5548,16 +5481,6 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_copy_ast", m);
     add_named_global(jlcopyast_func, (void*)&jl_copy_ast);
-
-    std::vector<Type*> args4(0);
-    args4.push_back(T_pint8);
-    args4.push_back(jl_pvalue_llvmt);
-    args4.push_back(jl_pvalue_llvmt);
-    jlclosure_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt, args4, false),
-                         Function::ExternalLinkage,
-                         "jl_new_closure", m);
-    add_named_global(jlclosure_func, (void*)&jl_new_closure);
 
     std::vector<Type*> args5(0);
     args5.push_back(T_size);

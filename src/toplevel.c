@@ -536,11 +536,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
 
     if (ewc) {
-        thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_emptysvec, thk);
         if (!jl_in_inference) {
             jl_type_infer(thk, (jl_tupletype_t*)jl_typeof(jl_emptytuple), thk);
         }
-        result = jl_apply((jl_function_t*)thunk, NULL, 0);
+        // TODO: call jl_compile
+        result = thk->fptr(NULL, NULL, 0);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);

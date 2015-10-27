@@ -75,7 +75,7 @@ static jl_fptr_t id_to_fptrs[] = {
   jl_f_top_eval, jl_f_isdefined, jl_f_tuple, jl_f_svec,
   jl_f_get_field, jl_f_set_field, jl_f_field_type, jl_f_nfields,
   jl_f_arraylen, jl_f_arrayref, jl_f_arrayset, jl_f_arraysize,
-  jl_f_instantiate_type, jl_f_kwcall, jl_trampoline,
+  jl_f_instantiate_type, jl_f_kwcall,
   jl_f_methodexists, jl_f_applicable, jl_f_invoke,
   jl_apply_generic, jl_unprotect_stack, jl_f_sizeof, jl_f_new_expr,
   NULL };
@@ -767,6 +767,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_tvar_t*)v)->ub);
         write_int8(s, ((jl_tvar_t*)v)->bound);
     }
+    /*
     else if (jl_is_function(v)) {
         writetag(s, jl_function_type);
         if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) {
@@ -791,6 +792,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             jl_serialize_fptr(s, (void*)f->fptr);
         }
     }
+    */
     else if (jl_is_lambda_info(v)) {
         writetag(s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
@@ -1323,6 +1325,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         tv->bound = read_int8(s);
         return (jl_value_t*)tv;
     }
+    /*
     else if (vtag == (jl_value_t*)jl_function_type) {
         if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) {
             int ref_only = read_int8(s);
@@ -1347,6 +1350,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         f->fptr = jl_deserialize_fptr(s);
         return (jl_value_t*)f;
     }
+    */
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
             (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
@@ -1377,7 +1381,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->def);
         li->capt = jl_deserialize_value(s, &li->capt);
         if (li->capt) jl_gc_wb(li, li->capt);
-        li->fptr = &jl_trampoline;
+        li->fptr = NULL;
         li->functionObject = NULL;
         li->cFunctionList = NULL;
         li->specFunctionObject = NULL;
@@ -2295,7 +2299,7 @@ void jl_init_serializer(void)
     htable_new(&backref_table, 0);
 
     void *tags[] = { jl_symbol_type, jl_gensym_type, jl_datatype_type,
-                     jl_function_type, jl_simplevector_type, jl_array_type,
+                     jl_simplevector_type, jl_array_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongSvec_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag,
@@ -2367,13 +2371,13 @@ void jl_init_serializer(void)
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
-                     jl_module_type->name, jl_box_type->name, jl_function_type->name,
+                     jl_module_type->name, jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name, jl_topnode_type->name,
                      jl_globalref_type->name,
 
-                     jl_root_task, jl_bottom_func,
+                     jl_root_task,
 
                      NULL };
 

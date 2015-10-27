@@ -596,17 +596,6 @@ void jl_module_run_initializer(jl_module_t *m)
     }
 }
 
-jl_function_t *jl_module_call_func(jl_module_t *m)
-{
-    if (m->call_func == NULL) {
-        jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
-        if (cf == NULL || !jl_is_function(cf) || !jl_is_gf(cf))
-            cf = jl_bottom_func;
-        m->call_func = cf;
-    }
-    return m->call_func;
-}
-
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
 {
     while (1) {

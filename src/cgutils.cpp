@@ -1193,8 +1193,6 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = jl_fieldref(e,0);
         goto type_of_constant;
     }
-    if (jl_is_lambda_info(e))
-        return (jl_value_t*)jl_function_type;
     if (jl_is_globalref(e)) {
         jl_value_t *v = static_eval(e, ctx);
         if (v == NULL)
