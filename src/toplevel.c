@@ -639,7 +639,8 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         tt->name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_is_tuple_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
+        jl_subtype(super,(jl_value_t*)jl_type_type,0) ||
+        super == (jl_value_t*)jl_builtin_type) {
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;

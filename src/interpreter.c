@@ -48,22 +48,15 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
     return v;
 }
 
-static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
-                           jl_value_t *eval0, jl_value_t **locals, size_t nl, size_t ngensym)
+static jl_value_t *do_call(jl_value_t **args, size_t nargs,
+                           jl_value_t **locals, size_t nl, size_t ngensym)
 {
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs+1);
     size_t i;
-    argv[0] = (jl_value_t*)f;
-    i = 0;
-    if (eval0) { /* 0-th argument has already been evaluated */
-        argv[1] = eval0; i++;
-    }
-    for(; i < nargs; i++) {
-        argv[i+1] = eval(args[i], locals, nl, ngensym);
-    }
-    // TODO jb/functions: use jl_apply_generic directly
-    jl_value_t *result = jl_apply(f, &argv[1], nargs);
+    for(i=0; i < nargs; i++)
+        argv[i] = eval(args[i], locals, nl, ngensym);
+    jl_value_t *result = jl_apply_generic(argv, nargs);
     JL_GC_POP();
     return result;
 }
@@ -171,7 +164,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym) {
-        if (jl_is_lambda_info(args[0])) {
+        /*if (jl_is_lambda_info(args[0])) {
             // directly calling an inner function ("let")
             jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
             if (jl_is_expr(li->ast) && !jl_lam_vars_captured((jl_expr_t*)li->ast) &&
@@ -200,12 +193,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
                     return ret;
                 }
             }
-        }
-        jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl, ngensym);
-        if (jl_is_func(f))
-            return do_call(f, &args[1], nargs-1, NULL, locals, nl, ngensym);
-        else
-            return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl, ngensym);
+            }*/
+        return do_call(args, nargs, locals, nl, ngensym);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];

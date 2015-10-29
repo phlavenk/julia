@@ -963,7 +963,6 @@ DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_svec_t *sparams)
     JL_TRY {
         jl_current_module = li->module;
         eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), ast, spenv);
-        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), ast, spenv);
     }
     JL_CATCH {
         jl_current_module = last_m;
@@ -1016,7 +1015,6 @@ int jl_in_sym_array(jl_array_t *a, jl_sym_t *v)
 int jl_local_in_ast(jl_expr_t *ast, jl_sym_t *sym)
 {
     return jl_in_vinfo_array(jl_lam_vinfo(ast), sym) ||
-        jl_in_vinfo_array(jl_lam_capt(ast), sym) ||
         jl_in_sym_array(jl_lam_staticparams(ast), sym);
 }
 

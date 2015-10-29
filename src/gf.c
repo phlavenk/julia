@@ -1356,10 +1356,12 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
 DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
 
 // compile-time method lookup
-jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
+jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
 {
+    assert(jl_nparams(types) > 0);
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
+    assert(jl_is_datatype(jl_tparam0(types)));
 
     // make sure exactly 1 method matches (issue #7302).
     int i;
@@ -1376,7 +1378,7 @@ jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
         }
     }
 
-    jl_methtable_t *mt = jl_gf_mtable(f);
+    jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
     jl_lambda_info_t *sf = NULL;
     // most of the time sf is rooted in mt, but if the method is staged it may
     // not be the case
@@ -1386,13 +1388,8 @@ jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
     } JL_CATCH {
         goto not_found;
     }
-    if (sf == NULL) {
+    if (sf == NULL || sf->ast == NULL || sf->inInference)
         goto not_found;
-    }
-    if (sf->ast == NULL) {
-        goto not_found;
-    }
-    if (sf->inInference) goto not_found;
     if (sf->functionObject == NULL) {
         if (sf->fptr != NULL)
             goto not_found;
@@ -1403,6 +1400,24 @@ jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
  not_found:
     JL_GC_POP();
     return NULL;
+}
+
+jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
+{
+    size_t l = jl_nparams(types);
+    jl_value_t *tt = jl_alloc_svec(1+l);
+    JL_GC_PUSH1(&tt);
+    if (jl_is_type(f))
+        jl_svecset(tt, 0, jl_wrap_Type(f));
+    else
+        jl_svecset(tt, 0, jl_typeof(f));
+    size_t i;
+    for(i=0; i < l; i++)
+        jl_svecset(tt, i+1, jl_tparam(types,i));
+    tt = jl_apply_tuple_type(tt);
+    jl_value_t *res = jl_get_specialization1((jl_tupletype_t*)tt);
+    JL_GC_POP();
+    return res;
 }
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);

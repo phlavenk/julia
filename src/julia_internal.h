@@ -88,6 +88,10 @@ JL_CALLABLE(jl_f_tuple);
 extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 
+// TODO jb/functions more efficient version of this
+// test whether f is the builtin with the given name
+#define jl_is_builtin(f,name) ((f)===jl_get_global(jl_core_module,jl_symbol(#name)))
+
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;
 extern jl_typename_t *jl_box_typename;
@@ -156,6 +160,7 @@ DLLEXPORT void jl_read_sonames(void);
 
 jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp);
+jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);

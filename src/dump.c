@@ -829,7 +829,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->module);
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
-        jl_serialize_value(s, (jl_value_t*)li->capt);
         jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
@@ -1379,8 +1378,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->roots) jl_gc_wb(li, li->roots);
         li->def = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
         jl_gc_wb(li, li->def);
-        li->capt = jl_deserialize_value(s, &li->capt);
-        if (li->capt) jl_gc_wb(li, li->capt);
         li->fptr = NULL;
         li->functionObject = NULL;
         li->cFunctionList = NULL;
@@ -1984,10 +1981,6 @@ DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     }
     tree_literal_values = li->module->constant_table;
     tree_enclosing_module = li->module;
-    li->capt = (jl_value_t*)jl_lam_capt((jl_expr_t*)ast);
-    jl_gc_wb(li, li->capt);
-    if (jl_array_len(li->capt) == 0)
-        li->capt = NULL;
     jl_serialize_value(&dest, jl_lam_body((jl_expr_t*)ast)->etype);
     jl_serialize_value(&dest, ast);
 

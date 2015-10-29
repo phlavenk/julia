@@ -1123,7 +1123,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 
 static jl_value_t *mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
-    jl_value_t *ftype = jl_new_datatype(jl_symbol(name), jl_any_type, jl_emptysvec,
+    jl_value_t *ftype = jl_new_datatype(jl_symbol(name), jl_builtin_type, jl_emptysvec,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_gc_preserve(ftype);
     jl_value_t *f = jl_new_struct(ftype);
@@ -1193,7 +1193,8 @@ void jl_init_primitives(void)
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
-    //add_builtin("Function", (jl_value_t*)jl_function_type);
+    add_builtin("Function", (jl_value_t*)jl_function_type);
+    add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);

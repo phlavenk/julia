@@ -384,6 +384,8 @@ extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
+extern DLLEXPORT jl_datatype_t *jl_function_type;
+extern DLLEXPORT jl_datatype_t *jl_builtin_type;
 
 extern DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern DLLEXPORT jl_datatype_t *jl_datatype_type;
