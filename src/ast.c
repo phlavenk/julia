@@ -64,7 +64,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
         argcount("invoke-julia-macro", nargs, 1);
-    jl_function_t *f = NULL;
+    jl_lambda_info_t *f = NULL;
     jl_value_t **margs;
     JL_GC_PUSHARGS(margs, nargs);
     int i;
@@ -73,9 +73,9 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 
     JL_TRY {
         margs[0] = scm_to_julia(args[0], 1);
-        f = (jl_function_t*)jl_toplevel_eval(margs[0]);
-        assert(jl_is_func(f));
-        result = jl_apply(f, &margs[1], nargs-1);
+        f = (jl_lambda_info_t*)jl_toplevel_eval(margs[0]);
+        assert(jl_is_lambda_info(f));
+        result = jl_call_method_internal(f, &margs[1], nargs-1);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -94,10 +94,10 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     fl_gc_handle(&scm);
     value_t scmresult;
     jl_module_t *defmod;
-    if (jl_is_gf(f))
-        defmod = jl_gf_mtable(f)->module;
+    if (jl_is_lambda_info(f))
+        defmod = f->module;
     else
-        defmod = f->linfo->module;
+        defmod = jl_gf_mtable(f)->module;
     if (defmod == NULL || defmod == jl_current_module) {
         scmresult = fl_cons(scm, FL_F);
     }

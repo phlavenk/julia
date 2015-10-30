@@ -1353,7 +1353,7 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
     return sf;
 }
 
-DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
+DLLEXPORT jl_value_t *jl_matching_methods(jl_value_t *types, int lim);
 
 // compile-time method lookup
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
@@ -1371,7 +1371,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
         // might match. also be conservative with tuples rather than trying
         // to analyze them in detail.
         if (ti == (jl_value_t*)jl_datatype_type || jl_is_tuple_type(ti)) {
-            jl_value_t *matches = jl_matching_methods(f, (jl_value_t*)types, 1);
+            jl_value_t *matches = jl_matching_methods((jl_value_t*)types, 1);
             if (matches == jl_false)
                 return NULL;
             break;
@@ -1405,7 +1405,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
 jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
 {
     size_t l = jl_nparams(types);
-    jl_value_t *tt = jl_alloc_svec(1+l);
+    jl_value_t *tt = (jl_value_t*)jl_alloc_svec(1+l);
     JL_GC_PUSH1(&tt);
     if (jl_is_type(f))
         jl_svecset(tt, 0, jl_wrap_Type(f));
@@ -1414,13 +1414,11 @@ jl_lambda_info_t *jl_get_specialization(jl_function_t *f, jl_tupletype_t *types)
     size_t i;
     for(i=0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
-    tt = jl_apply_tuple_type(tt);
-    jl_value_t *res = jl_get_specialization1((jl_tupletype_t*)tt);
+    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
+    jl_lambda_info_t *res = jl_get_specialization1((jl_tupletype_t*)tt);
     JL_GC_POP();
     return res;
 }
-
-void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tupletype_t *sig);
 
 static void parameters_to_closureenv(jl_value_t *ast, jl_svec_t *tvars)
 {
@@ -1648,7 +1646,6 @@ jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 
 DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_datatype_t *types)
 {
-    assert(jl_is_gf(gf));
     jl_methtable_t *mt = jl_gf_mtable(gf);
     jl_methlist_t *m = mt->defs;
     size_t typelen = jl_nparams(types);
@@ -1768,14 +1765,14 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
     return jl_new_struct(ftype);
 }
 
-void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_lambda_info_t *meth,
-                   jl_svec_t *tvars, int8_t isstaged)
+void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda_info_t *meth,
+                            jl_svec_t *tvars, int8_t isstaged)
 {
     assert(jl_is_tuple_type(types));
     assert(jl_is_lambda_info(meth));
-    assert(jl_is_mtable(jl_gf_mtable(gf)));
+    assert(jl_is_mtable(mt));
     JL_GC_PUSH1(&meth);
-    jl_sym_t *n = jl_gf_name(gf);
+    jl_sym_t *n = mt->name;
     if (meth->name != anonymous_sym && meth->name != n) {
         // already used by another GF; make a copy (issue #10373)
         meth = jl_add_static_parameters(meth, jl_emptysvec);
@@ -1784,8 +1781,14 @@ void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_lambda_info_t *m
     if (isstaged && tvars != jl_emptysvec) {
         all_p2c((jl_value_t*)meth, tvars);
     }
-    (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
+    (void)jl_method_table_insert(mt, types, meth, tvars, isstaged);
     JL_GC_POP();
+}
+
+void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_lambda_info_t *meth,
+                   jl_svec_t *tvars, int8_t isstaged)
+{
+    jl_add_method_to_table(jl_gf_mtable(gf), types, meth, tvars, isstaged);
 }
 
 DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig, jl_svec_t *tvars)
@@ -1933,10 +1936,12 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 // lim is the max # of methods to return. if there are more return jl_false.
 // -1 for no limit.
 DLLEXPORT
-jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
+jl_value_t *jl_matching_methods(jl_value_t *types, int lim)
 {
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    return ml_matches(mt->defs, type, jl_gf_name(gf), lim);
+    assert(jl_nparams(types) > 0);
+    assert(jl_is_datatype(jl_tparam0(types)));
+    jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
+    return ml_matches(mt->defs, types, mt->name, lim);
 }
 
 #ifdef __cplusplus

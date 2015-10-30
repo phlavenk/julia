@@ -486,12 +486,10 @@ JL_CALLABLE(jl_f_kwcall)
         jl_error("internal error: malformed keyword argument call");
     size_t nkeys = jl_unbox_long(args[1]);
     size_t pa = 3 + 2*nkeys;
-    jl_array_t *container = (jl_array_t*)args[pa-1];
+    jl_array_t *container = (jl_array_t*)args[pa-2];
     assert(jl_array_len(container) > 0);
-    jl_function_t *f = (jl_function_t*)args[pa-2];
+    jl_function_t *f = (jl_function_t*)args[pa-1];
 
-    //if (!jl_is_gf(f))
-    //    jl_exceptionf(jl_argumenterror_type, "function does not accept keyword arguments");
     jl_function_t *sorter = jl_gf_mtable(f)->kwsorter;
     if (sorter == NULL) {
         jl_exceptionf(jl_argumenterror_type, "function %s does not accept keyword arguments",
@@ -503,12 +501,11 @@ JL_CALLABLE(jl_f_kwcall)
         jl_cellset(container, i+1, args[2+i+1]);
     }
 
-    args += pa-1;
-    nargs -= pa-1;
-    assert(jl_is_gf(sorter));
-    jl_lambda_info_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, args, nargs, 1);
+    args += pa-2;
+    nargs -= pa-2;
+    jl_lambda_info_t *m = jl_method_lookup(jl_gf_mtable(sorter), args, nargs, 1);
     if (m == NULL) {
-        jl_no_method_error(f, args+1, nargs-1);
+        jl_no_method_error(f, args+2, nargs-2);
         // unreachable
     }
 
@@ -967,9 +964,9 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_methodexists)
 {
     JL_NARGS(method_exists, 2, 2);
-    JL_TYPECHK(method_exists, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("method_exists: not a generic function");
+    //JL_TYPECHK(method_exists, function, args[0]);
+    //if (!jl_is_gf(args[0]))
+    //    jl_error("method_exists: not a generic function");
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (jl_is_tuple(args[1])) {
@@ -990,9 +987,6 @@ JL_CALLABLE(jl_f_methodexists)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    //JL_TYPECHK(applicable, function, args[0]);
-    //if (!jl_is_gf(args[0]))
-    //    jl_error("applicable: not a generic function");
     return jl_method_lookup(jl_gf_mtable(args[0]),
                             &args[1], nargs-1, 1) != NULL ?
         jl_true : jl_false;
@@ -1001,9 +995,6 @@ JL_CALLABLE(jl_f_applicable)
 JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
-    //JL_TYPECHK(invoke, function, args[0]);
-    //if (!jl_is_gf(args[0]))
-    //    jl_error("invoke: not a generic function");
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (jl_is_tuple(args[1])) {
@@ -1121,11 +1112,14 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
+jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
+                                         jl_lambda_info_t *method);
+
 static jl_value_t *mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
-    jl_value_t *ftype = jl_new_datatype(jl_symbol(name), jl_builtin_type, jl_emptysvec,
-                                        jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    jl_gc_preserve(ftype);
+    jl_datatype_t *ftype = jl_new_datatype(jl_symbol(name), jl_builtin_type, jl_emptysvec,
+                                           jl_emptysvec, jl_emptysvec, 0, 0, 0);
+    jl_gc_preserve((jl_value_t*)ftype);
     jl_value_t *f = jl_new_struct(ftype);
     // TODO jb/functions: what should li->ast be?
     jl_lambda_info_t *li = jl_new_lambda_info(jl_nothing, jl_emptysvec, jl_core_module);
@@ -1305,16 +1299,6 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
             }
         }
     }
-    /*
-    else if (jl_is_func(v)) {
-        if (jl_is_gf(v)) {
-            n += jl_printf(out, "%s", jl_gf_name(v)->name);
-        }
-        else {
-            n += jl_printf(out, "#<function>");
-        }
-    }
-    */
     else if (jl_typeis(v, jl_intrinsic_type)) {
         n += jl_printf(out, "#<intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
     }

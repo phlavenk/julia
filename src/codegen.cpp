@@ -957,7 +957,7 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types. If rt is NULL then whatever return type is present is
 // accepted.
-static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref);
+static Function *gen_cfun_wrapper(jl_lambda_info_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref);
 static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt)
 {
     if (rt) {
@@ -1664,12 +1664,11 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                             return;
                         }
                     }
-                    else if (jl_is_function(fv)) {
-                        jl_function_t *ff = (jl_function_t*)fv;
-                        if ((ff->fptr == jl_f_get_field && alen==3 &&
+                    else {
+                        if ((jl_is_builtin(fv,getfield) && alen==3 &&
                              expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_long_type) ||
-                            ff->fptr == jl_f_nfields ||
-                            (ff->fptr == jl_f_apply && alen==4 &&
+                            jl_is_builtin(fv,nfields) ||
+                            (jl_is_builtin(fv,_apply) && alen==4 &&
                              expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_function_type)) {
                             esc = false;
                         }
@@ -1788,12 +1787,11 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym) {
             jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,true,false);
-            if (f && jl_is_function(f)) {
-                jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
+            if (f) {
                 // something reached via getfield from a stable value is also stable.
                 if (jl_array_dim0(e->args) == 3) {
                     jl_value_t *ty = expr_type(jl_exprarg(e,1), ctx);
-                    if ((fptr == &jl_f_get_field && jl_is_immutable_datatype(ty) &&
+                    if ((jl_is_builtin(f,getfield) && jl_is_immutable_datatype(ty) &&
                          is_getfield_nonallocating((jl_datatype_t*)ty, jl_exprarg(e,2)))) {
                         if (is_stable_expr(jl_exprarg(e,1), ctx))
                             return true;
@@ -3555,9 +3553,8 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     emit_gcpops(ctx);
 }
 
-static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref)
+static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_value_t *jlrettype, jl_tupletype_t *argt, int64_t isref)
 {
-    jl_lambda_info_t *lam = ff->linfo;
     cFunctionList_t *list = (cFunctionList_t*)lam->cFunctionList;
     if (list != NULL) {
         size_t i;
@@ -3595,7 +3592,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (fargt.size() + sret != fargt_sig.size())
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
-    jl_compile(ff);
+    jl_compile_linfo(lam);
     if (!lam->functionObject) {
         jl_errorf("error compiling %s while creating cfunction", lam->name->name);
     }

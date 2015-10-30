@@ -1265,8 +1265,8 @@
                               keys))))
      (if (null? restkeys)
          `(call (top kwcall) ,(length keys) ,@keyargs
-                ,f (call (top Array) (top Any) ,(* 2 (length keys)))
-                ,@pa)
+                (call (top Array) (top Any) ,(* 2 (length keys)))
+                ,f ,@pa)
          (let ((container (make-jlgensym)))
            `(block
              (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
@@ -1285,7 +1285,7 @@
                                   ,push-expr))))
                   restkeys)
              ,(let ((kw-call `(call (top kwcall) ,(length keys) ,@keyargs
-                                    ,f ,container ,@pa)))
+                                    ,container ,f ,@pa)))
                 (if (not (null? keys))
                     kw-call
                     `(if (call (top isempty) ,container)
