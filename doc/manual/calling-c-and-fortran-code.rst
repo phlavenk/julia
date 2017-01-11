@@ -800,6 +800,8 @@ but with the correct signature for Windows::
     hn = Array(UInt8, 256)
     err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
+Note that for 64-bit Windows programs the calling conventions have been unified and even for 
+WINAPI calls there is no need to specify the calling convention.
 For more information, please see the `LLVM Language Reference`_.
 
 .. _LLVM Language Reference: http://llvm.org/docs/LangRef.html#calling-conventions
